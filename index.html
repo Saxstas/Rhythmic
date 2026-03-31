@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Telegram Randomizer App</title>
+    
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    
+    <style>
+        /* --- СТИЛИ ИНТЕРФЕЙСА --- */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            text-align: center;
+            background-color: #1a1a2e;
+            color: #ffffff;
+            margin: 0;
+            padding: 15px;
+            /* Отключаем выделение текста для мобилок */
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .main-container {
+            max-width: 100%;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+        }
+
+        h1 { font-size: 20px; color: #00cec9; text-transform: uppercase; margin-bottom: 20px; }
+
+        .controls {
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        select, button {
+            padding: 10px 15px;
+            font-size: 14px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        select { background: #2d2d44; color: white; border: 1px solid #3d3d5c; }
+
+        #rollButton {
+            background: linear-gradient(135deg, #00cec9, #0984e3);
+            color: white;
+            font-weight: bold;
+        }
+
+        #rollButton:disabled { background: #444; opacity: 0.6; }
+
+        /* --- СЕТКА КАРТИНОК --- */
+        .grid {
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            gap: 10px; /* Отступ между картинками */
+            min-height: 180px;
+            margin: 15px 0;
+            padding: 15px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 12px;
+            overflow-x: auto; /* Прокрутка, если не влезет */
+        }
+
+        .image-card {
+            width: 150px;
+            height: 150px;
+            object-fit: cover;
+            border-radius: 10px;
+            border: 3px solid #3d3d5c;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            flex-shrink: 0;
+        }
+
+        .image-card.double-size {
+            width: 310px; /* (150*2) + 10px gap */
+            height: 150px;
+            border-color: #fdcb6e;
+        }
+
+        /* --- АДАПТАЦИЯ ПОД ТЕЛЕФОНЫ (Маленькие экраны) --- */
+        @media (max-width: 480px) {
+            .image-card {
+                width: 75px;
+                height: 75px;
+            }
+            .image-card.double-size {
+                width: 160px; /* (75*2) + 10px gap */
+                height: 75px;
+            }
+            .grid { min-height: 100px; }
+        }
+
+        .image-card.loaded { opacity: 1; }
+
+        /* --- МЕТРОНОМ --- */
+        .metronome-box {
+            margin-top: 25px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .bpm-display { font-size: 22px; font-weight: bold; color: #fdcb6e; }
+        #bpmRange { width: 80%; max-width: 250px; margin: 10px 0; }
+
+        .visual-beat {
+            width: 12px;
+            height: 12px;
+            background: #333;
+            border-radius: 50%;
+            margin: 8px auto;
+        }
+
+        .visual-beat.active { background: #ff4757; box-shadow: 0 0 10px #ff4757; }
+        #metronomeBtn { background: #2d3436; color: white; margin-top: 5px; }
+    </style>
+</head>
+<body>
+
+<div class="main-container">
+    <h1>🎰 Randomizer App</h1>
+
+    <div class="controls">
+        <select id="difficulty">
+            <option value="easy">Уровень 1</option>
+            <option value="medium">Уровень 2</option>
+            <option value="hard">ХАРД (1+2)</option>
+        </select>
+        <button id="rollButton">ВРАЩАТЬ!</button>
+    </div>
+
+    <div id="imageContainer" class="grid"></div>
+
+    <div class="metronome-box">
+        <div class="bpm-display"><span id="bpmValue">120</span> BPM</div>
+        <input type="range" id="bpmRange" min="30" max="240" value="120">
+        <div class="visual-beat" id="beatIndicator"></div>
+        <button id="metronomeBtn">Метроном: ВЫКЛ</button>
+    </div>
+</div>
+
+<script>
+    // Инициализация Telegram WebApp
+    const tg = window.Telegram.WebApp;
+    tg.ready();
+    tg.expand(); // Развернуть на всё окно
+
+    // --- БАЗА ДАННЫХ ---
+    const imageDatabase = {
+        easy: [
+            { src: "Size1/s1.png", size: 1 },
+            { src: "Size1/2.png", size: 1 },
+            { src: "Size1/3.png", size: 1 },
+            { src: "Size1/4.png", size: 1 },
+            { src: "Size1/5.png", size: 1 },
+            { src: "Size2/6.png", size: 2 }, 
+            { src: "Size2/7.png", size: 2 }, 
+            { src: "Size2/8.png", size: 2 }, 
+            { src: "Size2/9.png", size: 2 }, 
+            { src: "Size2/10.png", size: 2 }, 
+            { src: "Size2/11.png", size: 2 } 
+        ],
+        medium: [
+            { src: "https://picsum.photos/seed/m1/200/200", size: 1 },
+            { src: "https://picsum.photos/seed/m2/200/200", size: 1 },
+            { src: "https://picsum.photos/seed/mbig1/420/200", size: 2 }
+        ]
+    };
+
+    const container = document.getElementById('imageContainer');
+    const rollButton = document.getElementById('rollButton');
+    const diffSelect = document.getElementById('difficulty');
+
+    function getFinalSelection(pool, maxSlots) {
+        let result = [];
+        let current = 0;
+        const smalls = pool.filter(i => i.size === 1);
+        while (current < maxSlots) {
+            let img = pool[Math.floor(Math.random() * pool.length)];
+            if (current + img.size > maxSlots) {
+                img = smalls[Math.floor(Math.random() * smalls.length)];
+            }
+            result.push(img);
+            current += img.size;
+        }
+        return result;
+    }
+
+    function render(list) {
+        container.innerHTML = '';
+        list.forEach(item => {
+            const img = document.createElement('img');
+            img.src = item.src;
+            img.className = 'image-card';
+            if (item.size === 2) img.classList.add('double-size');
+            container.appendChild(img);
+            setTimeout(() => img.classList.add('loaded'), 20);
+        });
+    }
+
+    rollButton.addEventListener('click', () => {
+        // Виброотклик Telegram (если поддерживается)
+        if (tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+
+        const val = diffSelect.value;
+        const pool = (val === 'hard') ? [...imageDatabase.easy, ...imageDatabase.medium] : imageDatabase[val];
+        rollButton.disabled = true;
+        let ticks = 0;
+        
+        const anim = setInterval(() => {
+            const smalls = pool.filter(i => i.size === 1);
+            const fake = Array.from({length: 4}, () => smalls[Math.floor(Math.random() * smalls.length)]);
+            render(fake);
+            ticks++;
+            if (ticks > 12) {
+                clearInterval(anim);
+                render(getFinalSelection(pool, 4));
+                rollButton.disabled = false;
+            }
+        }, 100);
+    });
+
+    // --- МЕТРОНОМ ---
+    let audioCtx = null;
+    let isRunning = false;
+    let nextBeat = 0;
+    let bpm = 120;
+    let timer = null;
+
+    const bpmRange = document.getElementById('bpmRange');
+    const bpmVal = document.getElementById('bpmValue');
+    const metroBtn = document.getElementById('metronomeBtn');
+    const indicator = document.getElementById('beatIndicator');
+
+    bpmRange.addEventListener('input', (e) => {
+        bpm = e.target.value;
+        bpmVal.textContent = bpm;
+    });
+
+    function playTick() {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        osc.frequency.value = 1000;
+        g.gain.setValueAtTime(0.05, audioCtx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.08);
+        osc.connect(g); g.connect(audioCtx.destination);
+        osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+        indicator.classList.add('active');
+        setTimeout(() => indicator.classList.remove('active'), 100);
+    }
+
+    function scheduler() {
+        while (nextBeat < audioCtx.currentTime + 0.1) {
+            playTick();
+            nextBeat += 60.0 / bpm;
+        }
+        timer = setTimeout(scheduler, 25);
+    }
+
+    metroBtn.addEventListener('click', () => {
+        if (!audioCtx) audioCtx = new AudioContext();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        isRunning = !isRunning;
+        if (isRunning) {
+            nextBeat = audioCtx.currentTime;
+            scheduler();
+            metroBtn.textContent = "Метроном: ВКЛ";
+            metroBtn.style.background = "#ff4757";
+        } else {
+            clearTimeout(timer);
+            metroBtn.textContent = "Метроном: ВЫКЛ";
+            metroBtn.style.background = "#2d3436";
+        }
+    });
+</script>
+
+</body>
+</html>
